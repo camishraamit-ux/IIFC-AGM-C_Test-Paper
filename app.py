@@ -1,651 +1,468 @@
 import io
 import random
+import urllib.parse
+
 import docx
 import pandas as pd
-import streamlit as st
-import urllib.parse
 import plotly.graph_objects as go
+import streamlit as st
+
 from fpdf import FPDF
-
-# ==============================================================================
-# 1. STREAMLIT CONFIGURATION & CUSTOM MOBILE STYLING
-# ==============================================================================
-st.set_page_config(page_title="IIFCL AGM MCQ Assessment App", layout="centered", page_icon="🎯")
-
+st.set_page_config(
+    page_title="IIFCL AGM MCQ Assessment",
+    page_icon="🎯",
+    layout="centered"
+)
 st.markdown("""
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
+<style>
 
-    html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
 
-    .block-container {
-        padding-top: 0.6rem !important;
-        padding-bottom: 2rem !important;
-        max-width: 720px !important;
-    }
+html, body, [class*="css"]{
+    font-family:'Inter',sans-serif;
+}
 
-    /* ---------- Registration Hero (fills the screen) ---------- */
-    .reg-hero {
-        min-height: 60vh;
-        width: 100%;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        text-align: center;
-        background: linear-gradient(160deg, #1e3a8a 0%, #2563eb 60%, #3b82f6 100%);
-        border-radius: 22px;
-        padding: 40px 24px;
-        margin-bottom: 22px;
-        box-shadow: 0px 10px 24px rgba(30, 58, 138, 0.25);
-    }
-    .reg-hero .reg-icon { font-size: 56px; margin-bottom: 10px; }
-    .reg-hero h1 {
-        color: #ffffff !important;
-        font-size: 34px !important;
-        font-weight: 900 !important;
-        line-height: 1.25 !important;
-        margin: 0 0 14px 0 !important;
-    }
-    .reg-hero p {
-        color: #dbeafe !important;
-        font-size: 18px !important;
-        font-weight: 500 !important;
-        max-width: 340px;
-        margin: 0 auto !important;
-    }
+.block-container{
+    padding-top:0.6rem !important;
+    max-width:720px !important;
+}
 
-    /* ---------- Top Info Bar ---------- */
-    .top-info-bar {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
-        padding: 14px 20px;
-        border-radius: 14px;
-        margin-bottom: 14px;
-        box-shadow: 0px 6px 16px rgba(30, 58, 138, 0.25);
-    }
-    .subject-badge {
-        font-size: 17px;
-        font-weight: 800;
-        color: #ffffff;
-    }
-    .candidate-badge {
-        font-size: 15px;
-        font-weight: 600;
-        color: #dbeafe;
-    }
+.reg-hero{
+    background:linear-gradient(135deg,#1e3a8a,#2563eb);
+    padding:40px;
+    border-radius:20px;
+    text-align:center;
+    color:white;
+    margin-bottom:25px;
+}
 
-    /* ---------- Progress Ring Row ---------- */
-    .progress-wrap {
-        display: flex;
-        align-items: center;
-        gap: 14px;
-        margin-bottom: 18px;
-    }
-    .progress-track {
-        flex: 1;
-        height: 14px;
-        background: #e2e8f0;
-        border-radius: 999px;
-        overflow: hidden;
-    }
-    .progress-fill {
-        height: 100%;
-        background: linear-gradient(90deg, #2563eb, #3b82f6);
-        border-radius: 999px;
-        transition: width 0.4s ease;
-    }
-    .progress-count {
-        font-size: 16px;
-        font-weight: 800;
-        color: #1e3a8a;
-        white-space: nowrap;
-    }
+.top-info-bar{
+    display:flex;
+    justify-content:space-between;
+    padding:12px 18px;
+    background:linear-gradient(135deg,#1e3a8a,#2563eb);
+    color:white;
+    border-radius:14px;
+    margin-bottom:15px;
+}
 
-    /* ---------- Question Card ---------- */
-    .question-card {
-        background: #ffffff;
-        border-radius: 18px;
-        padding: 28px 24px;
-        margin-bottom: 20px;
-        border: 2px solid #1e3a8a;
-        box-shadow: 0px 8px 20px rgba(30, 58, 138, 0.10);
-    }
-    .q-label {
-        display: inline-block;
-        background: #1e3a8a;
-        color: #fff;
-        font-size: 14px;
-        font-weight: 800;
-        padding: 4px 12px;
-        border-radius: 999px;
-        margin-bottom: 12px;
-    }
-    .question-text {
-        font-size: 28px !important;
-        font-weight: 800 !important;
-        color: #0f172a !important;
-        line-height: 1.45 !important;
-    }
+.question-card{
+    border:2px solid #1e3a8a;
+    border-radius:16px;
+    padding:24px;
+    margin-bottom:20px;
+    background:white;
+}
 
-    /* ---------- Option Cards (radio reskinned) ---------- */
-    div[data-testid="stRadio"] { width: 100% !important; }
-    div[data-testid="stRadio"] > div {
-        width: 100% !important;
-        display: flex !important;
-        flex-direction: column !important;
-        gap: 14px !important;
-    }
-    div[data-testid="stRadio"] label {
-        width: 100% !important;
-        min-height: 78px !important;
-        font-size: 28px !important;
-        font-weight: 700 !important;
-        color: #0f172a !important;
-        padding: 18px 22px !important;
-        border-radius: 14px !important;
-        background-color: #f8fafc !important;
-        border: 2.5px solid #cbd5e1 !important;
-        display: flex !important;
-        align-items: center !important;
-        cursor: pointer !important;
-        box-sizing: border-box !important;
-        transition: all 0.15s ease-in-out !important;
-        box-shadow: 0px 3px 10px rgba(0,0,0,0.05) !important;
-    }
-    div[data-testid="stRadio"] label:hover {
-        background-color: #eff6ff !important;
-        border-color: #2563eb !important;
-        color: #1e3a8a !important;
-        transform: translateY(-2px);
-        box-shadow: 0px 8px 16px rgba(37, 99, 235, 0.15) !important;
-    }
-    div[data-testid="stRadio"] label[data-checked="true"],
-    div[data-testid="stRadio"] label:has(input:checked) {
-        background-color: #dbeafe !important;
-        border-color: #1e3a8a !important;
-        box-shadow: 0px 6px 14px rgba(30, 58, 138, 0.2) !important;
-    }
-    div[data-testid="stRadio"] input[type="radio"] {
-        transform: scale(2) !important;
-        margin-right: 20px !important;
-        accent-color: #1e3a8a !important;
-    }
-    div[data-testid="stRadio"] label p {
-        font-size: 28px !important;
-        font-weight: 700 !important;
-        margin: 0 !important;
-    }
+.question-text{
+    font-size:24px;
+    font-weight:800;
+}
 
-    /* ---------- Nav Buttons ---------- */
-    div.stButton > button {
-        font-size: 22px !important;
-        font-weight: 800 !important;
-        padding: 18px 22px !important;
-        height: 62px !important;
-        border-radius: 14px !important;
-        box-shadow: 0px 5px 12px rgba(0, 0, 0, 0.12) !important;
-        transition: transform 0.1s ease !important;
-    }
-    div.stButton > button:active { transform: scale(0.97); }
+.review-card{
+    padding:18px;
+    border-radius:14px;
+    margin-bottom:15px;
+}
 
-    /* ---------- Review Cards ---------- */
-    .review-card {
-        border-radius: 16px;
-        padding: 20px;
-        margin-bottom: 16px;
-        border-left: 8px solid #94a3b8;
-        background: #f8fafc;
-        box-shadow: 0px 4px 12px rgba(0,0,0,0.05);
-    }
-    .review-card.correct { border-left-color: #10b981; background: #ecfdf5; }
-    .review-card.incorrect { border-left-color: #ef4444; background: #fef2f2; }
-    .review-card.unanswered { border-left-color: #f59e0b; background: #fffbeb; }
-    .review-q { font-size: 19px; font-weight: 800; color: #0f172a; margin-bottom: 10px; }
-    .review-tag {
-        display: inline-block;
-        font-size: 13px;
-        font-weight: 800;
-        padding: 3px 10px;
-        border-radius: 999px;
-        color: #fff;
-        margin-bottom: 8px;
-    }
-    .tag-correct { background: #10b981; }
-    .tag-incorrect { background: #ef4444; }
-    .tag-unanswered { background: #f59e0b; }
-    .review-line { font-size: 16px; color: #334155; margin: 2px 0; }
-    </style>
+.correct{
+    background:#ecfdf5;
+    border-left:8px solid #10b981;
+}
+
+.incorrect{
+    background:#fef2f2;
+    border-left:8px solid #ef4444;
+}
+
+.unanswered{
+    background:#fffbeb;
+    border-left:8px solid #f59e0b;
+}
+
+</style>
 """, unsafe_allow_html=True)
-
-# ==============================================================================
-# 2. DOCX EXTRACTION LOGIC
-# ==============================================================================
 @st.cache_data
 def extract_mcqs_from_docx(docx_path):
+
     questions_dict = {}
     answers_dict = {}
 
     doc = docx.Document(docx_path)
-    for table in doc.tables:
-        for row in table.rows:
-            clean_row = [cell.text.replace('\n', ' ').strip() if cell else "" for cell in row.cells]
 
-            if len(clean_row) < 3 or not clean_row[0].isdigit():
+    for table in doc.tables:
+
+        for row in table.rows:
+
+            cells = [
+                cell.text.replace("\n", " ").strip()
+                for cell in row.cells
+            ]
+
+            if len(cells) < 3:
                 continue
 
-            q_num = int(clean_row[0])
+            if not cells[0].isdigit():
+                continue
 
-            if len(clean_row) >= 6:
-                questions_dict[q_num] = {
-                    "id": q_num,
-                    "question": clean_row[1],
-                    "options": [clean_row[2], clean_row[3], clean_row[4], clean_row[5]]
+            q_no = int(cells[0])
+
+            if len(cells) >= 6:
+
+                questions_dict[q_no] = {
+                    "id": q_no,
+                    "question": cells[1],
+                    "options": cells[2:6]
                 }
-            elif len(clean_row) == 3:
-                answers_dict[q_num] = clean_row[2]
 
-    mcq_list = []
-    for q_num, q_data in questions_dict.items():
-        ans_text = answers_dict.get(q_num, "").strip()
+            elif len(cells) == 3:
+
+                answers_dict[q_no] = cells[2]
+
+    records = []
+
+    for q_no, q_data in questions_dict.items():
+
+        ans_text = answers_dict.get(q_no, "").strip()
 
         if not ans_text:
             continue
 
         correct_index = None
+
         for idx, opt in enumerate(q_data["options"]):
-            if opt and (opt.strip().lower() == ans_text.lower() or opt.strip().lower() in ans_text.lower()):
+
+            if opt.strip().lower() == ans_text.strip().lower():
                 correct_index = idx
                 break
 
-        mcq_list.append({
+        records.append({
             "id": q_data["id"],
             "question": q_data["question"],
             "options": q_data["options"],
             "correct_answer_text": ans_text,
-            "correct_index": correct_index
+            "correct_index": correct_index,
         })
 
-    return pd.DataFrame(mcq_list)
-
-# ==============================================================================
-# 3. PDF SCORECARD GENERATOR
-# ==============================================================================
-_PDF_SAFE_REPLACEMENTS = {
-    "\u2018": "'", "\u2019": "'",      # curly single quotes
-    "\u201c": '"', "\u201d": '"',      # curly double quotes
-    "\u2013": "-", "\u2014": "-",      # en dash, em dash
-    "\u2026": "...",                   # ellipsis
-    "\u20b9": "Rs.",                   # rupee sign
-    "\u00a0": " ",                     # non-breaking space
-    "\u2022": "-", "\u25cf": "-",       # bullets
-    "\u2212": "-",                     # minus sign
-    "\u00d7": "x",                     # multiplication sign
-    "\u00f7": "/",                     # division sign
-}
-
-def pdf_safe(text):
-    if text is None:
-        return ""
-    text = str(text)
-    for uni_char, ascii_eq in _PDF_SAFE_REPLACEMENTS.items():
-        text = text.replace(uni_char, ascii_eq)
-    return text.encode("latin-1", "replace").decode("latin-1")
-
+    return pd.DataFrame(records)
+``
 class ScorecardPDF(FPDF):
+
     def header(self):
         self.set_font("Helvetica", "B", 14)
-        self.set_text_color(30, 58, 138)
-        self.cell(0, 10, "IIFCL AGM ASSESSMENT REPORT CARD", ln=True, align="C")
-        self.ln(2)
+        self.cell(
+            0,
+            10,
+            "IIFCL AGM ASSESSMENT REPORT",
+            ln=True,
+            align="C"
+        )
 
-def generate_pdf_scorecard(candidate_name, subject_name, score, total_questions, percentage, detailed_report):
+
+def generate_pdf_scorecard(
+        candidate_name,
+        subject_name,
+        score,
+        total_questions,
+        percentage,
+        detailed_report
+):
+
     pdf = ScorecardPDF()
+
     pdf.add_page()
-    pdf.set_auto_page_break(auto=True, margin=15)
 
-    pdf.set_font("Helvetica", "B", 10)
-    pdf.set_fill_color(243, 244, 246)
-    pdf.set_draw_color(209, 213, 219)
+    pdf.set_auto_page_break(
+        auto=True,
+        margin=15
+    )
 
-    meta_info = [
-        ("Candidate Name:", pdf_safe(candidate_name)),
-        ("Subject:", pdf_safe(subject_name)),
-        ("Final Score:", f"{score} / {total_questions}"),
-        ("Percentage:", f"{percentage}%")
-    ]
+    pdf.set_font("Helvetica", "", 10)
 
-    for label, val in meta_info:
-        pdf.cell(45, 7, f"  {label}", border=1, fill=True)
-        pdf.set_font("Helvetica", "", 10)
-        pdf.cell(135, 7, f"  {val}", border=1, ln=True)
-        pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(
+        0,
+        8,
+        f"Candidate : {candidate_name}",
+        ln=True
+    )
 
-    pdf.ln(6)
+    pdf.cell(
+        0,
+        8,
+        f"Subject : {subject_name}",
+        ln=True
+    )
 
-    pdf.set_font("Helvetica", "B", 12)
-    pdf.set_text_color(30, 58, 138)
-    pdf.cell(0, 8, "Detailed Assessment Breakdown", ln=True)
-    pdf.set_draw_color(30, 58, 138)
-    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
-    pdf.ln(4)
+    pdf.cell(
+        0,
+        8,
+        f"Score : {score}/{total_questions}",
+        ln=True
+    )
+
+    pdf.cell(
+        0,
+        8,
+        f"Percentage : {percentage}%",
+        ln=True
+    )
+
+    pdf.ln(5)
 
     for item in detailed_report:
-        pdf.set_font("Helvetica", "B", 10)
-        pdf.set_text_color(0, 0, 0)
-        pdf.multi_cell(0, 5, pdf_safe(f"{item['q_num']}. {item['question']}"))
-        pdf.ln(1)
 
-        pdf.set_font("Helvetica", "", 9)
-        if item["status_type"] == "correct":
-            pdf.set_text_color(16, 185, 129)
-            pdf.cell(0, 5, pdf_safe(f"    Marked Answer : {item['user_answer']} (Correct - 1 Mark)"), ln=True)
-            pdf.set_text_color(30, 58, 138)
-            pdf.cell(0, 5, pdf_safe(f"    Correct Answer: {item['correct_answer']}"), ln=True)
-        elif item["status_type"] == "incorrect":
-            pdf.set_text_color(239, 68, 68)
-            pdf.cell(0, 5, pdf_safe(f"    Marked Answer : {item['user_answer']} (Incorrect - 0 Marks)"), ln=True)
-            pdf.set_text_color(30, 58, 138)
-            pdf.cell(0, 5, pdf_safe(f"    Correct Answer: {item['correct_answer']}"), ln=True)
-        else:
-            pdf.set_text_color(217, 119, 6)
-            pdf.cell(0, 5, f"    Marked Answer : Unanswered (0 Marks)", ln=True)
-            pdf.set_text_color(30, 58, 138)
-            pdf.cell(0, 5, f"    Correct Answer: {item['correct_answer']}", ln=True)
+        pdf.multi_cell(
+            0,
+            5,
+            f"{item['q_num']} {item['question']}"
+        )
+
+        pdf.cell(
+            0,
+            5,
+            f"Your Answer : {item['user_answer']}",
+            ln=True
+        )
+
+        pdf.cell(
+            0,
+            5,
+            f"Correct Answer : {item['correct_answer']}",
+            ln=True
+        )
 
         pdf.ln(3)
 
-    return bytes(pdf.output())
-
-# ==============================================================================
-# 4. APP STATE INITIALIZATION
-# ==============================================================================
-SUBJECT_FILES = {
+    return pdf.output(dest="S").encode("latin-1")
+    SUBJECT_FILES = {
     "IIFCL AGM Test 1": "IIFCL AGM Test 1.docx",
     "IIFCL AGM Test 2": "IIFCL AGM Test 2.docx"
 }
 
-for key, default in [
-    ("test_started", False),
-    ("candidate_name", ""),
-    ("selected_subject", list(SUBJECT_FILES.keys())[0]),
-    ("assessment_df", None),
-    ("user_answers", {}),
-    ("submitted", False),
-    ("current_q_index", 0),
-]:
-    if key not in st.session_state:
-        st.session_state[key] = default
+defaults = {
+    "test_started": False,
+    "candidate_name": "",
+    "selected_subject": "",
+    "assessment_df": None,
+    "user_answers": {},
+    "submitted": False,
+    "current_q_index": 0
+}
 
-# ==============================================================================
-# 5. REGISTRATION SCREEN
-# ==============================================================================
-if not st.session_state.test_started:
-    st.markdown(
-        '''
-        <div class="reg-hero">
-            <div class="reg-icon">🎯</div>
-            <h1>IIFCL AGM MCQ Assessment App</h1>
-            <p>Configure your assessment settings below to get started.</p>
-        </div>
-        ''',
-        unsafe_allow_html=True
-    )
+for k, v in defaults.items():
 
-    with st.form("setup_form"):
-        name_input = st.text_input("Enter Your Full Name:", value=st.session_state.candidate_name)
-        subject_choice = st.selectbox("Select Test Paper:", options=list(SUBJECT_FILES.keys()))
+    if k not in st.session_state:
+        st.session_state[k] = v
+        if not st.session_state.test_started:
+
+    st.markdown("""
+    <div class="reg-hero">
+        <h1>🎯 IIFCL AGM Assessment</h1>
+        <p>Start your test below</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    with st.form("registration"):
+
+        name = st.text_input("Candidate Name")
+
+        subject = st.selectbox(
+            "Select Paper",
+            list(SUBJECT_FILES.keys())
+        )
 
         q_count = st.selectbox(
-            "Select Number of Questions:",
-            options=[10, 20, 25, 30, 50],
-            index=2
+            "Questions",
+            [10,20,25,30,50]
         )
 
-        start_btn = st.form_submit_button("Start Assessment 🚀", type="primary", use_container_width=True)
-
-        if start_btn:
-            if not name_input.strip():
-                st.error("Please enter your name to proceed.")
-            else:
-                st.session_state.candidate_name = name_input.strip()
-                st.session_state.selected_subject = subject_choice
-
-                docx_filename = SUBJECT_FILES[subject_choice]
-                try:
-                    df_all = extract_mcqs_from_docx(docx_filename)
-                    total_available = len(df_all)
-
-                    if total_available == 0:
-                        st.error("No valid questions with available answers were found in this document.")
-                    else:
-                        num_to_sample = min(q_count, total_available)
-                        if num_to_sample < q_count:
-                            st.warning(f"Note: Only {total_available} questions available in this test paper.")
-
-                        st.session_state.assessment_df = df_all.sample(n=num_to_sample).reset_index(drop=True)
-                        st.session_state.user_answers = {}
-                        st.session_state.submitted = False
-                        st.session_state.current_q_index = 0
-                        st.session_state.test_started = True
-                        st.rerun()
-                except Exception as e:
-                    st.error(f"Could not load '{docx_filename}'. Ensure file is uploaded. Error: {e}")
-
-# ==============================================================================
-# 6. MCQ QUESTION DISPLAY SCREEN
-# ==============================================================================
-else:
-    df_test = st.session_state.assessment_df
-    total_q = len(df_test)
-
-    if not st.session_state.submitted:
-        curr_idx = st.session_state.current_q_index
-        row = df_test.iloc[curr_idx]
-
-        st.markdown(
-            f'''
-            <div class="top-info-bar">
-                <span class="subject-badge">📚 {st.session_state.selected_subject}</span>
-                <span class="candidate-badge">👤 {st.session_state.candidate_name}</span>
-            </div>
-            ''',
-            unsafe_allow_html=True
+        start = st.form_submit_button(
+            "Start Assessment"
         )
 
-        pct = int(((curr_idx + 1) / total_q) * 100)
-        st.markdown(
-            f'''
-            <div class="progress-wrap">
-                <div class="progress-track">
-                    <div class="progress-fill" style="width:{pct}%;"></div>
-                </div>
-                <div class="progress-count">{curr_idx + 1}/{total_q}</div>
-            </div>
-            ''',
-            unsafe_allow_html=True
+    if start:
+
+        df = extract_mcqs_from_docx(
+            SUBJECT_FILES[subject]
         )
 
-        st.markdown(
-            f'''
-            <div class="question-card">
-                <span class="q-label">QUESTION {curr_idx + 1}</span>
-                <div class="question-text">{row["question"]}</div>
-            </div>
-            ''',
-            unsafe_allow_html=True
+        st.session_state.assessment_df = (
+            df.sample(
+                n=min(q_count, len(df)),
+                random_state=random.randint(1,100000)
+            ).reset_index(drop=True)
         )
 
-        valid_options = [opt for opt in row["options"] if opt]
-        saved_choice = st.session_state.user_answers.get(curr_idx, None)
+        st.session_state.candidate_name = name
+        st.session_state.selected_subject = subject
+        st.session_state.test_started = True
 
-        choice = st.radio(
-            label="Select your answer:",
-            options=range(len(valid_options)),
-            format_func=lambda x: f"{chr(65 + x)}    {valid_options[x]}",
-            key=f"q_radio_{curr_idx}",
-            index=saved_choice,
-            label_visibility="collapsed",
+        st.rerun()
+        saved_choice = st.session_state.user_answers.get(curr_idx)
+
+choice = st.radio(
+    "Answer",
+    options=range(len(valid_options)),
+    format_func=lambda x:
+        f"{chr(65+x)}. {valid_options[x]}",
+    key=f"q_{curr_idx}",
+    index=saved_choice if saved_choice is not None else 0,
+    label_visibility="collapsed"
+)
+st.session_state.user_answers[curr_idx] = choice
+score = 0
+
+detailed_report = []
+
+for idx, row in df_test.iterrows():
+
+    user_choice = st.session_state.user_answers.get(idx)
+
+    correct_idx = row["correct_index"]
+
+    status = "unanswered"
+
+    user_answer = ""
+
+    if user_choice is not None:
+
+        selected = row["options"][user_choice]
+
+        user_answer = selected
+
+        if user_choice == correct_idx:
+
+            score += 1
+            status = "correct"
+
+        else:
+            status = "incorrect"
+
+    detailed_report.append({
+        "q_num": f"Q{idx+1}",
+        "question": row["question"],
+        "user_answer": user_answer,
+        "correct_answer": row["correct_answer_text"],
+        "status_type": status
+    })
+``
+incorrect_count = sum(
+    1 for x in detailed_report
+    if x["status_type"] == "incorrect"
+)
+
+unanswered_count = sum(
+    1 for x in detailed_report
+    if x["status_type"] == "unanswered"
+)
+
+percentage = round(
+    score / len(df_test) * 100,
+    2
+)
+
+fig = go.Figure()
+
+fig.add_trace(
+    go.Pie(
+        labels=[
+            "Correct",
+            "Incorrect",
+            "Unanswered"
+        ],
+        values=[
+            score,
+            incorrect_count,
+            unanswered_count
+        ],
+        hole=0.70,
+        marker=dict(
+            colors=[
+                "#10b981",
+                "#ef4444",
+                "#f59e0b"
+            ]
         )
+    )
+)
 
-        if choice is not None:
-            st.session_state.user_answers[curr_idx] = choice
-
-        st.write("")
-
-        col_prev, col_next = st.columns([1, 1])
-        with col_prev:
-            if curr_idx > 0:
-                if st.button("⬅️ Previous", use_container_width=True):
-                    st.session_state.current_q_index -= 1
-                    st.rerun()
-            else:
-                st.button("⬅️ Previous", disabled=True, use_container_width=True)
-
-        with col_next:
-            if curr_idx == total_q - 1:
-                if st.button("✅ Submit", type="primary", use_container_width=True):
-                    st.session_state.submitted = True
-                    st.rerun()
-            else:
-                if st.button("Next ➡️", type="primary", use_container_width=True):
-                    st.session_state.current_q_index += 1
-                    st.rerun()
-
-    # ==========================================================================
-    # 7. SCORECARD & REVIEW SCREEN
-    # ==========================================================================
-    else:
-        st.markdown(f'<h2 style="color:#1e3a8a; font-weight:900;">{st.session_state.selected_subject}</h2>', unsafe_allow_html=True)
-        st.markdown(f"**Candidate Name:** {st.session_state.candidate_name}")
-        st.divider()
-
-        score = 0
-        total_questions = len(df_test)
-        detailed_report = []
-
-        for display_num, row in df_test.iterrows():
-            sn = display_num + 1
-            user_choice = st.session_state.user_answers.get(display_num)
-            correct_idx = row["correct_index"]
-            correct_ans_text = row["correct_answer_text"]
-            valid_options = [opt for opt in row["options"] if opt]
-
-            is_correct = False
-            user_ans_str = ""
-            if user_choice is not None:
-                selected_opt_text = valid_options[user_choice]
-                user_ans_str = f"{chr(65 + user_choice)}. {selected_opt_text}"
-                is_correct = (user_choice == correct_idx) or (selected_opt_text.strip().lower() == correct_ans_text.strip().lower())
-
-            status_type = "unanswered"
-            if is_correct:
-                score += 1
-                status_type = "correct"
-            elif user_choice is not None:
-                status_type = "incorrect"
-
-            detailed_report.append({
-                "q_num": f"Q{sn}",
-                "question": row["question"],
-                "user_answer": user_ans_str,
-                "correct_answer": correct_ans_text,
-                "status_type": status_type
-            })
-
-        percentage = round((score / total_questions) * 100, 2)
-        incorrect_count = sum(1 for i in detailed_report if i["status_type"] == "incorrect")
-        unanswered_count = sum(1 for i in detailed_report if i["status_type"] == "unanswered")
-
-        st.subheader("📊 Final Assessment Scorecard")
-        col1, col2 = st.columns(2)
-        col1.metric(label="Total Score", value=f"{score} / {total_questions}")
-        col2.metric(label="Percentage", value=f"{percentage}%")
-
-        fig = go.Figure(data=[go.Pie(
-            labels=["Correct", "Incorrect", "Unanswered"],
-            values=[score, incorrect_count, unanswered_count],
-            hole=0.6,
-            marker=dict(colors=["#10b981", "#ef4444", "#f59e0b"]),
-            textinfo="label+value",
-            textfont=dict(size=16, color="#ffffff", family="Inter"),
-        )])
-        fig.update_layout(
-            showlegend=False,
-            margin=dict(l=10, r=10, t=10, b=10),
-            height=280,
-            annotations=[dict(text=f"{percentage}%", x=0.5, y=0.5, font_size=26, font_family="Inter", font_color="#1e3a8a", showarrow=False)]
+fig.update_layout(
+    height=350,
+    annotations=[
+        dict(
+            text=f"{percentage}%",
+            x=0.5,
+            y=0.5,
+            showarrow=False,
+            font=dict(size=28)
         )
-        st.plotly_chart(fig, use_container_width=True)
-        st.divider()
+    ]
+)
 
-        st.subheader("📲 Export & Share Results")
+st.plotly_chart(
+    fig,
+    use_container_width=True
+)
+share_text = f"""
+🎯 IIFCL AGM Assessment
 
-        share_text = (
-            f"🎓 *IIFCL AGM Assessment Results*\n"
-            f"👤 *Candidate:* {st.session_state.candidate_name}\n"
-            f"📚 *Subject:* {st.session_state.selected_subject}\n"
-            f"🏆 *Score:* {score}/{total_questions} ({percentage}%)\n"
-            f"✨ Completed via IIFCL AGM Assessment App!"
-        )
-        whatsapp_url = f"https://api.whatsapp.com/send?text={urllib.parse.quote(share_text)}"
+Candidate: {st.session_state.candidate_name}
 
-        st.markdown(
-            f'<a href="{whatsapp_url}" target="_blank" style="text-decoration:none;">'
-            f'<button style="background-color:#25D366;color:white;border:none;padding:18px 24px;'
-            f'border-radius:12px;font-size:22px;font-weight:800;cursor:pointer;width:100%;'
-            f'box-shadow:0px 5px 12px rgba(0,0,0,0.12);">'
-            f'📲 Share Score on WhatsApp</button></a>',
-            unsafe_allow_html=True
-        )
-        st.write("")
+Subject: {st.session_state.selected_subject}
 
-        pdf_data = generate_pdf_scorecard(
-            candidate_name=st.session_state.candidate_name,
-            subject_name=st.session_state.selected_subject,
-            score=score,
-            total_questions=total_questions,
-            percentage=percentage,
-            detailed_report=detailed_report
-        )
+Score: {score}/{len(df_test)}
 
-        st.download_button(
-            label="📄 Download Official PDF Scorecard",
-            data=pdf_data,
-            file_name=f"{st.session_state.candidate_name}_IIFCL_Scorecard.pdf",
-            mime="application/pdf",
-            use_container_width=True
-        )
+Percentage: {percentage}%
+"""
 
-        st.divider()
-        st.subheader("📝 Question Breakdown & Review")
+whatsapp_url = (
+    "https://api.whatsapp.com/send?text="
+    + urllib.parse.quote(share_text)
+)
 
-        tag_map = {
-            "correct": ("tag-correct", "✅ CORRECT · 1 MARK"),
-            "incorrect": ("tag-incorrect", "❌ INCORRECT · 0 MARKS"),
-            "unanswered": ("tag-unanswered", "⚠️ UNANSWERED · 0 MARKS"),
-        }
+st.markdown(
+    f"""
+    {whatsapp_url}
+    <button
+    style="
+       width:100%;
+       padding:16px;
+       background:#25D366;
+       color:white;
+       border:none;
+       border-radius:12px;
+       font-size:18px;
+       font-weight:bold;">
+       📲 Share on WhatsApp
+    </button>
+    </a>
+    """,
+    unsafe_allow_html=True
+)
+pdf_data = generate_pdf_scorecard(
+    st.session_state.candidate_name,
+    st.session_state.selected_subject,
+    score,
+    len(df_test),
+    percentage,
+    detailed_report
+)
 
-        for item in detailed_report:
-            tag_class, tag_label = tag_map[item["status_type"]]
-            user_line = item["user_answer"] if item["user_answer"] else "Not attempted"
-            st.markdown(
-                f'''
-                <div class="review-card {item["status_type"]}">
-                    <span class="review-tag {tag_class}">{tag_label}</span>
-                    <div class="review-q">{item["q_num"]}. {item["question"]}</div>
-                    <div class="review-line">🖊️ <b>Your answer:</b> {user_line}</div>
-                    <div class="review-line">✔️ <b>Correct answer:</b> {item["correct_answer"]}</div>
-                </div>
-                ''',
-                unsafe_allow_html=True
-            )
+st.download_button(
+    "📄 Download PDF Scorecard",
+    pdf_data,
+    file_name=f"{st.session_state.candidate_name}_Scorecard.pdf",
+    mime="application/pdf"
+)
+if st.button(
+    "🔄 Take Another Test",
+    use_container_width=True
+):
 
-        if st.button("🔄 Take Another Test", use_container_width=True):
-            st.session_state.test_started = False
-            st.session_state.submitted = False
-            st.session_state.user_answers = {}
-            st.session_state.current_q_index = 0
-            st.rerun()
+    st.session_state.test_started = False
+    st.session_state.submitted = False
+    st.session_state.current_q_index = 0
+    st.session_state.user_answers = {}
+    st.session_state.assessment_df = None
+
+    st.rerun()
